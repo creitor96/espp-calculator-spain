@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- ESPP Simulator — Spain
-     Version : 1.2.1
+     Version : v1.2.2
      Date    : 2026-05-13
      Author  : Adrian Rosello
      Changes : Per-period contribution % input; cap changed to min(20% salary, €5,000) per period
@@ -336,7 +336,7 @@
 <body>
 
 <h1>ESPP Simulator — Spain</h1>
-<p class="subtitle">Employee Stock Purchase Plan · Tax simulation under Spanish regulations (LIRPF Art. 42.3.f) · <span style="opacity:0.5">v1.2.1</span></p>
+<p class="subtitle">Employee Stock Purchase Plan · Tax simulation under Spanish regulations (LIRPF Art. 42.3.f) · <span style="opacity:0.5">v1.2.2</span></p>
 
 <div class="grid">
 
@@ -368,7 +368,7 @@
       <!-- Share prices USD toggle -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
         <label class="sw" style="margin:0;flex-shrink:0;font-size:0.85rem;color:var(--text)">
-          <input type="checkbox" id="pricesUSD" onchange="updatePricesUI();calculate()">
+          <input type="checkbox" id="pricesUSD" checked onchange="updatePricesUI();calculate()">
           <span class="sw-track"><span class="sw-thumb"></span></span>
           <span>Prices in USD</span>
         </label>
@@ -388,10 +388,10 @@
         </label>
       </div>
       <div id="p1_inputs">
-      <label>Share price on first day of the period (<span class="prices-sym">€</span>)</label>
-      <input type="number" id="p1_start" value="100.00" min="0.01" step="0.01" oninput="calculate()" />
-      <label>Share price on last day of the period (<span class="prices-sym">€</span>)</label>
-      <input type="number" id="p1_end" value="150.00" min="0.01" step="0.01" oninput="calculate()" />
+      <label>Share price on first day of the period (<span class="prices-sym">$</span>)</label>
+      <input type="number" id="p1_start" value="219.040" min="0.01" step="0.01" oninput="calculate()" />
+      <label>Share price on last day of the period (<span class="prices-sym">$</span>)</label>
+      <input type="number" id="p1_end" value="222.260" min="0.01" step="0.01" oninput="calculate()" />
       <label>Salary contribution (%) <span class="tag">≤ 20% · max €5,000/period</span></label>
       <div class="range-row">
         <input type="range" id="p1_contribRange" min="1" max="20" value="20" oninput="syncPeriodContrib(1,this.value);calculate()" />
@@ -410,10 +410,10 @@
         </label>
       </div>
       <div id="p2_inputs">
-      <label>Share price on first day of the period (<span class="prices-sym">€</span>)</label>
-      <input type="number" id="p2_start" value="150.00" min="0.01" step="0.01" oninput="calculate()" />
-      <label>Share price on last day of the period (<span class="prices-sym">€</span>)</label>
-      <input type="number" id="p2_end" value="200.00" min="0.01" step="0.01" oninput="calculate()" />
+      <label>Share price on first day of the period (<span class="prices-sym">$</span>)</label>
+      <input type="number" id="p2_start" value="227.660" min="0.01" step="0.01" oninput="calculate()" />
+      <label>Share price on last day of the period (<span class="prices-sym">$</span>)</label>
+      <input type="number" id="p2_end" value="281.290" min="0.01" step="0.01" oninput="calculate()" />
       <label>Salary contribution (%) <span class="tag">≤ 20% · max €5,000/period</span></label>
       <div class="range-row">
         <input type="range" id="p2_contribRange" min="1" max="20" value="20" oninput="syncPeriodContrib(2,this.value);calculate()" />
@@ -431,7 +431,7 @@
       <!-- Live price row -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
         <label class="sw" style="margin:0;flex-shrink:0;font-size:0.85rem;color:var(--text)">
-          <input type="checkbox" id="useLivePrice" checked onchange="updateLivePriceUI()">
+          <input type="checkbox" id="useLivePrice" onchange="updateLivePriceUI()">
           <span class="sw-track"><span class="sw-thumb"></span></span>
           <span>Live price</span>
         </label>
@@ -444,7 +444,7 @@
       <div id="fetchStatus" style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;min-height:1.2em"></div>
 
       <label>Sale price per share (<span id="currencySymbol">$</span>)</label>
-      <input type="number" id="salePrice" value="200.00" min="0.01" step="0.01" oninput="document.getElementById('useLivePrice').checked=false;updateLivePriceUI();calculate()" />
+      <input type="number" id="salePrice" value="222.26" min="0.01" step="0.01" oninput="document.getElementById('useLivePrice').checked=false;updateLivePriceUI();calculate()" />
 
       <label>When do you sell? <span class="tag">affects the strategy</span></label>
       <select id="saleStrategy" onchange="calculate()">
@@ -853,7 +853,7 @@
   updatePeriodEuros(2);
   calculate();
   // Auto-fetch on load
-  fetchExchangeRate().then(() => fetchLivePrice());
+  fetchExchangeRate();
 </script>
 
 <footer style="max-width:1100px;margin:40px auto 0;padding:20px 16px;border-top:1px solid #2e3350;font-size:0.75rem;color:#8892a4;line-height:1.7">
