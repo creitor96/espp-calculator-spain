@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- ESPP Simulator — Spain
-     Version : 1.1.0
-     Date    : 2026-05-12
-     Author  : ARosell
+     Version : 1.2.0
+     Date    : 2026-05-13
+     Author  : Adrian Rosello
      Changes : Per-period contribution % input; cap changed to min(20% salary, €5,000) per period
 -->
 <html lang="en">
@@ -97,7 +97,7 @@
 
     label:first-of-type { margin-top: 0; }
 
-    input[type="number"], select {
+    input[type="number"], input[type="text"], select {
       width: 100%;
       background: var(--surface2);
       border: 1px solid var(--border);
@@ -294,6 +294,42 @@
       color: var(--yellow);
       margin-top: 14px;
     }
+
+    .fetch-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--accent);
+      padding: 7px 14px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color 0.2s;
+    }
+    .fetch-btn:hover { border-color: var(--accent); }
+
+    /* Toggle switch */
+    .sw { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+    .sw input[type="checkbox"] { display: none; }
+    .sw-track {
+      position: relative;
+      width: 40px; height: 22px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      transition: background 0.2s, border-color 0.2s;
+      flex-shrink: 0;
+    }
+    .sw-thumb {
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 16px; height: 16px;
+      background: var(--muted);
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .sw input:checked ~ .sw-track { background: var(--accent); border-color: var(--accent); }
+    .sw input:checked ~ .sw-track .sw-thumb { transform: translateX(18px); background: #fff; }
   </style>
 </head>
 <body>
@@ -311,12 +347,12 @@
       <h2><span class="icon">👤</span> Personal Details</h2>
 
       <label>Gross annual salary (€)</label>
-      <input type="number" id="salary" value="52000" min="0" step="500" oninput="updatePeriodEuros(1);updatePeriodEuros(2);" />
+      <input type="number" id="salary" value="52000" min="0" step="500" oninput="updatePeriodEuros(1);updatePeriodEuros(2);calculate();" />
 
       <label>IRPF withholding rate (%) — <a href="https://taxdown.es/irpf/tabla-tramos" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">check your rate ↗</a></label>
       <div class="range-row">
-        <input type="range" id="irpfRange" min="1" max="47" value="38.5" oninput="syncIrpf(this.value)" />
-        <input type="number" id="irpf" value="38.5" min="1" max="47" oninput="syncIrpfRange(this.value)" />
+        <input type="range" id="irpfRange" min="1" max="47" value="38.5" oninput="syncIrpf(this.value);calculate()" />
+        <input type="number" id="irpf" value="38.5" min="1" max="47" oninput="syncIrpfRange(this.value);calculate()" />
       </div>
 
 
@@ -330,19 +366,21 @@
 
       <div class="period-header" style="display:flex;align-items:center;justify-content:space-between">
         <span>First Period</span>
-        <label style="margin:0;font-size:0.8rem;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="checkbox" id="p1_active" checked onchange="togglePeriod(1)" /> Active
+        <label class="sw" style="margin:0;font-size:0.8rem;color:var(--muted)">
+          <input type="checkbox" id="p1_active" checked onchange="togglePeriod(1);calculate()">
+          <span class="sw-track"><span class="sw-thumb"></span></span>
+          <span>Active</span>
         </label>
       </div>
       <div id="p1_inputs">
       <label>Share price on day 1 of the period (€)</label>
-      <input type="number" id="p1_start" value="12.00" min="0.01" step="0.01" />
+      <input type="number" id="p1_start" value="100.00" min="0.01" step="0.01" oninput="calculate()" />
       <label>Share price on last day of the period (€)</label>
-      <input type="number" id="p1_end" value="14.50" min="0.01" step="0.01" />
+      <input type="number" id="p1_end" value="150.00" min="0.01" step="0.01" oninput="calculate()" />
       <label>Salary contribution (%) <span class="tag">≤ 20% · max €5,000/period</span></label>
       <div class="range-row">
-        <input type="range" id="p1_contribRange" min="1" max="20" value="20" oninput="syncPeriodContrib(1,this.value)" />
-        <input type="number" id="p1_contrib" value="20" min="1" max="20" step="1" oninput="syncPeriodContribRange(1,this.value)" />
+        <input type="range" id="p1_contribRange" min="1" max="20" value="20" oninput="syncPeriodContrib(1,this.value);calculate()" />
+        <input type="number" id="p1_contrib" value="20" min="1" max="20" step="1" oninput="syncPeriodContribRange(1,this.value);calculate()" />
       </div>
       <div id="p1ContribEuros" style="font-size:0.78rem;color:var(--muted);margin-top:6px;"></div>
       <div id="p1ContribWarning" style="display:none;margin-top:8px;"></div>
@@ -350,19 +388,21 @@
 
       <div class="period-header" style="display:flex;align-items:center;justify-content:space-between">
         <span>Second Period</span>
-        <label style="margin:0;font-size:0.8rem;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="checkbox" id="p2_active" onchange="togglePeriod(2)" /> Active
+        <label class="sw" style="margin:0;font-size:0.8rem;color:var(--muted)">
+          <input type="checkbox" id="p2_active" onchange="togglePeriod(2);calculate()">
+          <span class="sw-track"><span class="sw-thumb"></span></span>
+          <span>Active</span>
         </label>
       </div>
       <div id="p2_inputs">
       <label>Share price on day 1 of the period (€)</label>
-      <input type="number" id="p2_start" value="0" min="0.01" step="0.01" />
+      <input type="number" id="p2_start" value="150.00" min="0.01" step="0.01" oninput="calculate()" />
       <label>Share price on last day of the period (€)</label>
-      <input type="number" id="p2_end" value="0" min="0.01" step="0.01" />
+      <input type="number" id="p2_end" value="200.00" min="0.01" step="0.01" oninput="calculate()" />
       <label>Salary contribution (%) <span class="tag">≤ 20% · max €5,000/period</span></label>
       <div class="range-row">
-        <input type="range" id="p2_contribRange" min="1" max="20" value="20" oninput="syncPeriodContrib(2,this.value)" />
-        <input type="number" id="p2_contrib" value="20" min="1" max="20" step="1" oninput="syncPeriodContribRange(2,this.value)" />
+        <input type="range" id="p2_contribRange" min="1" max="20" value="20" oninput="syncPeriodContrib(2,this.value);calculate()" />
+        <input type="number" id="p2_contrib" value="20" min="1" max="20" step="1" oninput="syncPeriodContribRange(2,this.value);calculate()" />
       </div>
       <div id="p2ContribEuros" style="font-size:0.78rem;color:var(--muted);margin-top:6px;"></div>
       <div id="p2ContribWarning" style="display:none;margin-top:8px;"></div>
@@ -373,11 +413,40 @@
     <div class="card" style="margin-bottom:16px">
       <h2><span class="icon">💸</span> Sale Simulation</h2>
 
-      <label>Sale price per share (€)</label>
-      <input type="number" id="salePrice" value="16.00" min="0.01" step="0.01" />
+      <!-- Live price row -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <label class="sw" style="margin:0;flex-shrink:0;font-size:0.85rem;color:var(--text)">
+          <input type="checkbox" id="useLivePrice" checked onchange="updateLivePriceUI()">
+          <span class="sw-track"><span class="sw-thumb"></span></span>
+          <span>Live price</span>
+        </label>
+        <div id="livePriceControls" style="display:flex;gap:8px;align-items:center;flex:1">
+          <input type="text" id="ticker" value="ADI" placeholder="Ticker" style="width:70px;font-family:monospace;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" />
+          <input type="text" id="apiKey" placeholder="Finnhub API key" style="flex:1;font-family:monospace;display:none" />
+          <button class="fetch-btn" onclick="fetchLivePrice()">🔄 Fetch</button>
+        </div>
+      </div>
+      <div id="fetchStatus" style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;min-height:1.2em"></div>
+
+      <!-- USD rate row -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <label class="sw" style="margin:0;flex-shrink:0;font-size:0.85rem;color:var(--text)">
+          <input type="checkbox" id="useUSD" checked onchange="updateCurrencyUI();calculate()">
+          <span class="sw-track"><span class="sw-thumb"></span></span>
+          <span>USD → €</span>
+        </label>
+        <div id="usdRateControls" style="display:flex;gap:8px;align-items:center;flex:1">
+          <input type="number" id="usdEurRate" value="0.8764" min="0.0001" step="0.0001" style="flex:1" oninput="calculate()" />
+          <button class="fetch-btn" onclick="fetchExchangeRate()">🔄 Fetch</button>
+        </div>
+      </div>
+      <div id="rateStatus" style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;min-height:1em"></div>
+
+      <label>Sale price per share (<span id="currencySymbol">€</span>)</label>
+      <input type="number" id="salePrice" value="200.00" min="0.01" step="0.01" oninput="document.getElementById('useLivePrice').checked=false;updateLivePriceUI();calculate()" />
 
       <label>When do you sell? <span class="tag">affects the strategy</span></label>
-      <select id="saleStrategy">
+      <select id="saleStrategy" onchange="calculate()">
         <option value="fast">Quick sale (shortly after the period closes)</option>
         <option value="3year">Wait 3 years (request IRPF refund on 20% discount)</option>
       </select>
@@ -385,14 +454,13 @@
       <div class="info-box" id="strategyInfo"></div>
     </div>
 
-    <button class="btn" onclick="calculate()">🧮 Run Simulation</button>
   </div>
 
   <!-- RIGHT COL: RESULTS -->
   <div>
     <div class="card" id="resultsCard">
       <h2><span class="icon">📊</span> Results</h2>
-      <p style="color:var(--muted);font-size:0.85rem">Fill in the details and click Run Simulation.</p>
+      <p style="color:var(--muted);font-size:0.85rem">Results update automatically as you change the inputs.</p>
     </div>
   </div>
 
@@ -405,8 +473,12 @@
   function togglePeriod(n) {
     const active = document.getElementById('p' + n + '_active').checked;
     const inputs = document.getElementById('p' + n + '_inputs');
-    inputs.style.opacity = active ? '1' : '0.35';
-    inputs.querySelectorAll('input').forEach(el => el.disabled = !active);
+    if (n === 2) {
+      inputs.style.display = active ? '' : 'none';
+    } else {
+      inputs.style.opacity = active ? '1' : '0.35';
+      inputs.querySelectorAll('input').forEach(el => el.disabled = !active);
+    }
   }
 
   function syncPeriodContrib(n, v) {
@@ -434,6 +506,98 @@
         warn.style.display = 'none';
       }
     }
+  }
+
+  function updateLivePriceUI() {
+    const live = document.getElementById('useLivePrice').checked;
+    const ctrl = document.getElementById('livePriceControls');
+    ctrl.style.opacity = live ? '1' : '0.35';
+    ctrl.querySelectorAll('input,button').forEach(el => el.disabled = !live);
+  }
+
+  function updateCurrencyUI() {
+    const isUSD = document.getElementById('useUSD').checked;
+    const ctrl = document.getElementById('usdRateControls');
+    ctrl.style.opacity = isUSD ? '1' : '0.35';
+    ctrl.querySelectorAll('input,button').forEach(el => el.disabled = !isUSD);
+    document.getElementById('currencySymbol').textContent = isUSD ? '$' : '€';
+  }
+
+  function getSalePriceEur() {
+    const raw = parseFloat(document.getElementById('salePrice').value) || 0;
+    const isUSD = document.getElementById('useUSD').checked;
+    if (isUSD) {
+      const rate = parseFloat(document.getElementById('usdEurRate').value) || 1;
+      return raw * rate;
+    }
+    return raw;
+  }
+
+  const FINNHUB_DEFAULT_KEY = 'd82cdhhr01qmgc0fii1gd82cdhhr01qmgc0fii20';
+
+  async function fetchLivePrice() {
+    const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+    const statusEl = document.getElementById('fetchStatus');
+    const keyInput = document.getElementById('apiKey');
+    if (!ticker) { statusEl.style.color = 'var(--yellow)'; statusEl.textContent = '⚠️ Enter a ticker symbol first.'; return; }
+
+    const key = keyInput.value.trim() || localStorage.getItem('finnhubKey') || FINNHUB_DEFAULT_KEY;
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = 'Fetching…';
+    try {
+      const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=${encodeURIComponent(key)}`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      const price = data?.c;  // current price
+      if (!price || price <= 0) throw new Error('No price returned — check the ticker symbol');
+      // Save key if user entered a custom one
+      if (keyInput.value.trim()) localStorage.setItem('finnhubKey', keyInput.value.trim());
+      keyInput.style.display = 'none';
+      document.getElementById('salePrice').value = price.toFixed(2);
+      document.getElementById('useUSD').checked = true;
+      updateCurrencyUI();
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = `✓ ${ticker}: USD ${price.toFixed(2)} (live)`;
+      calculate();
+    } catch(e) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✗ ' + (e.message || 'Could not fetch price.') + ' — enter key or price manually.';
+      keyInput.style.display = '';
+    }
+  }
+
+  async function fetchExchangeRate() {
+    const statusEl = document.getElementById('rateStatus');
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = 'Fetching rate…';
+    const sources = [
+      async () => {
+        const resp = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(6000) });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        if (data.result !== 'success') throw new Error('API error');
+        return data.rates.EUR;
+      },
+      async () => {
+        const resp = await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR', { signal: AbortSignal.timeout(6000) });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        return data.rates.EUR;
+      }
+    ];
+    for (const source of sources) {
+      try {
+        const rate = await source();
+        document.getElementById('usdEurRate').value = rate.toFixed(4);
+        statusEl.style.color = 'var(--green)';
+        statusEl.textContent = `✓ 1 USD = ${rate.toFixed(4)} EUR`;
+        calculate();
+        return;
+      } catch(e) { /* try next */ }
+    }
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '✗ Could not fetch rate. Enter manually.';
   }
 
   // Capital gains tax (base del ahorro, Spain 2025)
@@ -485,7 +649,7 @@
     const p1_end         = parseFloat(document.getElementById('p1_end').value) || 0;
     const p2_start       = parseFloat(document.getElementById('p2_start').value) || 0;
     const p2_end         = parseFloat(document.getElementById('p2_end').value) || 0;
-    const salePrice      = parseFloat(document.getElementById('salePrice').value) || 0;
+    const salePrice      = getSalePriceEur();
     const strategy       = document.getElementById('saleStrategy').value;
 
     // Per-period contribution cap: min(20% of annual salary, €5,000)
@@ -520,6 +684,10 @@
     const netB_clean = totalSaleValue - totalContribution - (capitalGain > 0 ? cgTax : 0);
     const totalTaxB = capitalGain > 0 ? cgTax : 0;
 
+    // IRPF already paid on the gross salary used to fund the contribution
+    // (contribution comes from net pay, so gross needed = contribution / (1 - rate))
+    const irpfOnContribution = totalContribution * (irpfRate / 100) / (1 - irpfRate / 100);
+
     // Effective discount net cost
     const breakEvenPrice = p1.refPrice * 0.80; // For strategy A
     const warningIrpf = totalDiscount > 12000;
@@ -530,19 +698,23 @@
 
       <div class="results-grid">
         <div class="stat">
-          <div class="label">Total contribution</div>
+          <div class="label">Total contribution (net pay)</div>
           <div class="value accent">${fmtE(totalContribution)}</div>
+        </div>
+        <div class="stat">
+          <div class="label">IRPF paid on contribution (gross cost)</div>
+          <div class="value red">${fmtE(irpfOnContribution)}</div>
         </div>
         <div class="stat">
           <div class="label">Shares acquired</div>
           <div class="value accent">${fmt(totalShares, 4)}</div>
         </div>
         <div class="stat">
-          <div class="label">Total discount received</div>
+          <div class="label">20% discount value</div>
           <div class="value green">${fmtE(totalDiscount)}</div>
         </div>
         <div class="stat">
-          <div class="label">IRPF on 20% discount</div>
+          <div class="label">20% discount IRPF withheld</div>
           <div class="value red">${fmtE(totalIrpfDiscount)}</div>
         </div>
         <div class="stat">
@@ -583,7 +755,7 @@
           <tr><td>Employee contribution</td><td class="right">${fmtE(p1.contribution)}</td><td class="right">${fmtE(p2.contribution)}</td></tr>
           <tr><td>Shares acquired</td><td class="right">${fmt(p1.shares, 4)}</td><td class="right">${fmt(p2.shares, 4)}</td></tr>
           <tr><td>Market value at purchase</td><td class="right">${fmtE(p1.marketValue)}</td><td class="right">${fmtE(p2.marketValue)}</td></tr>
-          <tr><td>Discount received</td><td class="right" style="color:var(--green)">${fmtE(p1.discount)}</td><td class="right" style="color:var(--green)">${fmtE(p2.discount)}</td></tr>
+          <tr><td>Company gift (free shares value)</td><td class="right" style="color:var(--green)">${fmtE(p1.discount)}</td><td class="right" style="color:var(--green)">${fmtE(p2.discount)}</td></tr>
           <tr><td>IRPF on 20% discount (${irpfRate}%)</td><td class="right" style="color:var(--red)">${fmtE(p1.irpfOnDiscount)}</td><td class="right" style="color:var(--red)">${fmtE(p2.irpfOnDiscount)}</td></tr>
         </tbody>
       </table>
@@ -657,9 +829,13 @@
 
   // Auto-calculate on load
   togglePeriod(2);
+  updateLivePriceUI();
+  updateCurrencyUI();
   updatePeriodEuros(1);
   updatePeriodEuros(2);
   calculate();
+  // Auto-fetch on load
+  fetchExchangeRate().then(() => fetchLivePrice());
 </script>
 
 <footer style="max-width:1100px;margin:40px auto 0;padding:20px 16px;border-top:1px solid #2e3350;font-size:0.75rem;color:#8892a4;line-height:1.7">
