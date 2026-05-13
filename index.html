@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- ESPP Simulator — Spain
-     Version : 1.2.0
+     Version : 1.2.1
      Date    : 2026-05-13
      Author  : Adrian Rosello
      Changes : Per-period contribution % input; cap changed to min(20% salary, €5,000) per period
@@ -307,6 +307,7 @@
       transition: border-color 0.2s;
     }
     .fetch-btn:hover { border-color: var(--accent); }
+    .prices-sym, #currencySymbol { font-weight: bold; color: var(--text); }
 
     /* Toggle switch */
     .sw { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
@@ -362,7 +363,21 @@
     <div class="card" style="margin-bottom:16px">
       <h2><span class="icon">📈</span> Share Prices</h2>
 
-      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">Enter the share prices for each 6-month period. The company uses the lowest price as the reference and applies a 20% discount.</p>
+      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">Enter the share prices for each 6-month period. The company uses the lowest price as the reference.</p>
+
+      <!-- Share prices USD toggle -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <label class="sw" style="margin:0;flex-shrink:0;font-size:0.85rem;color:var(--text)">
+          <input type="checkbox" id="pricesUSD" onchange="updatePricesUI();calculate()">
+          <span class="sw-track"><span class="sw-thumb"></span></span>
+          <span>Prices in USD</span>
+        </label>
+        <div id="pricesUSDControls" style="display:flex;gap:8px;align-items:center;flex:1">
+          <input type="number" id="usdEurRate" value="0.8764" min="0.0001" step="0.0001" style="flex:1" oninput="calculate()" />
+          <button class="fetch-btn" onclick="fetchExchangeRate()">🔄 Fetch</button>
+        </div>
+      </div>
+      <div id="rateStatus" style="font-size:0.75rem;color:var(--muted);margin-bottom:14px;min-height:1em"></div>
 
       <div class="period-header" style="display:flex;align-items:center;justify-content:space-between">
         <span>First Period</span>
@@ -373,9 +388,9 @@
         </label>
       </div>
       <div id="p1_inputs">
-      <label>Share price on day 1 of the period (€)</label>
+      <label>Share price on first day of the period (<span class="prices-sym">€</span>)</label>
       <input type="number" id="p1_start" value="100.00" min="0.01" step="0.01" oninput="calculate()" />
-      <label>Share price on last day of the period (€)</label>
+      <label>Share price on last day of the period (<span class="prices-sym">€</span>)</label>
       <input type="number" id="p1_end" value="150.00" min="0.01" step="0.01" oninput="calculate()" />
       <label>Salary contribution (%) <span class="tag">≤ 20% · max €5,000/period</span></label>
       <div class="range-row">
@@ -395,9 +410,9 @@
         </label>
       </div>
       <div id="p2_inputs">
-      <label>Share price on day 1 of the period (€)</label>
+      <label>Share price on first day of the period (<span class="prices-sym">€</span>)</label>
       <input type="number" id="p2_start" value="150.00" min="0.01" step="0.01" oninput="calculate()" />
-      <label>Share price on last day of the period (€)</label>
+      <label>Share price on last day of the period (<span class="prices-sym">€</span>)</label>
       <input type="number" id="p2_end" value="200.00" min="0.01" step="0.01" oninput="calculate()" />
       <label>Salary contribution (%) <span class="tag">≤ 20% · max €5,000/period</span></label>
       <div class="range-row">
@@ -428,21 +443,7 @@
       </div>
       <div id="fetchStatus" style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;min-height:1.2em"></div>
 
-      <!-- USD rate row -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-        <label class="sw" style="margin:0;flex-shrink:0;font-size:0.85rem;color:var(--text)">
-          <input type="checkbox" id="useUSD" checked onchange="updateCurrencyUI();calculate()">
-          <span class="sw-track"><span class="sw-thumb"></span></span>
-          <span>USD → €</span>
-        </label>
-        <div id="usdRateControls" style="display:flex;gap:8px;align-items:center;flex:1">
-          <input type="number" id="usdEurRate" value="0.8764" min="0.0001" step="0.0001" style="flex:1" oninput="calculate()" />
-          <button class="fetch-btn" onclick="fetchExchangeRate()">🔄 Fetch</button>
-        </div>
-      </div>
-      <div id="rateStatus" style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;min-height:1em"></div>
-
-      <label>Sale price per share (<span id="currencySymbol">€</span>)</label>
+      <label>Sale price per share (<span id="currencySymbol">$</span>)</label>
       <input type="number" id="salePrice" value="200.00" min="0.01" step="0.01" oninput="document.getElementById('useLivePrice').checked=false;updateLivePriceUI();calculate()" />
 
       <label>When do you sell? <span class="tag">affects the strategy</span></label>
@@ -508,6 +509,21 @@
     }
   }
 
+  function updatePricesUI() {
+    const isUSD = document.getElementById('pricesUSD').checked;
+    document.querySelectorAll('.prices-sym').forEach(el => el.textContent = isUSD ? '$' : '€');
+    document.getElementById('currencySymbol').textContent = isUSD ? '$' : '€';
+    const ctrl = document.getElementById('pricesUSDControls');
+    ctrl.style.opacity = isUSD ? '1' : '0.35';
+    ctrl.querySelectorAll('input,button').forEach(el => el.disabled = !isUSD);
+  }
+
+  function getSharePriceEur(raw) {
+    if (!document.getElementById('pricesUSD').checked) return raw;
+    const rate = parseFloat(document.getElementById('usdEurRate').value) || 1;
+    return raw * rate;
+  }
+
   function updateLivePriceUI() {
     const live = document.getElementById('useLivePrice').checked;
     const ctrl = document.getElementById('livePriceControls');
@@ -516,8 +532,8 @@
   }
 
   function updateCurrencyUI() {
-    const isUSD = document.getElementById('useUSD').checked;
-    const ctrl = document.getElementById('usdRateControls');
+    const isUSD = document.getElementById('pricesUSD').checked;
+    const ctrl = document.getElementById('pricesUSDControls');
     ctrl.style.opacity = isUSD ? '1' : '0.35';
     ctrl.querySelectorAll('input,button').forEach(el => el.disabled = !isUSD);
     document.getElementById('currencySymbol').textContent = isUSD ? '$' : '€';
@@ -525,7 +541,7 @@
 
   function getSalePriceEur() {
     const raw = parseFloat(document.getElementById('salePrice').value) || 0;
-    const isUSD = document.getElementById('useUSD').checked;
+    const isUSD = document.getElementById('pricesUSD').checked;
     if (isUSD) {
       const rate = parseFloat(document.getElementById('usdEurRate').value) || 1;
       return raw * rate;
@@ -555,8 +571,9 @@
       if (keyInput.value.trim()) localStorage.setItem('finnhubKey', keyInput.value.trim());
       keyInput.style.display = 'none';
       document.getElementById('salePrice').value = price.toFixed(2);
-      document.getElementById('useUSD').checked = true;
+      document.getElementById('pricesUSD').checked = true;
       updateCurrencyUI();
+      updatePricesUI();
       statusEl.style.color = 'var(--green)';
       statusEl.textContent = `✓ ${ticker}: USD ${price.toFixed(2)} (live)`;
       calculate();
@@ -645,10 +662,10 @@
     const p1Active = document.getElementById('p1_active').checked;
     const p2Active = document.getElementById('p2_active').checked;
 
-    const p1_start       = parseFloat(document.getElementById('p1_start').value) || 0;
-    const p1_end         = parseFloat(document.getElementById('p1_end').value) || 0;
-    const p2_start       = parseFloat(document.getElementById('p2_start').value) || 0;
-    const p2_end         = parseFloat(document.getElementById('p2_end').value) || 0;
+    const p1_start       = getSharePriceEur(parseFloat(document.getElementById('p1_start').value) || 0);
+    const p1_end         = getSharePriceEur(parseFloat(document.getElementById('p1_end').value) || 0);
+    const p2_start       = getSharePriceEur(parseFloat(document.getElementById('p2_start').value) || 0);
+    const p2_end         = getSharePriceEur(parseFloat(document.getElementById('p2_end').value) || 0);
     const salePrice      = getSalePriceEur();
     const strategy       = document.getElementById('saleStrategy').value;
 
@@ -831,6 +848,7 @@
   togglePeriod(2);
   updateLivePriceUI();
   updateCurrencyUI();
+  updatePricesUI();
   updatePeriodEuros(1);
   updatePeriodEuros(2);
   calculate();
