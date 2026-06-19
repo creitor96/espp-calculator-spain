@@ -437,7 +437,7 @@
         </label>
         <input type="number" id="salePrice" value="222.26" min="0.01" step="0.01" style="flex:1;min-width:0" oninput="document.getElementById('useLivePrice').checked=false;updateLivePriceUI();calculate();saveToStorage()" />
         <span style="font-size:0.78rem;color:var(--muted);white-space:nowrap"><span id="currencySymbol">$</span>/share</span>
-        <div id="livePriceControls" style="display:none;flex;gap:6px;align-items:center">
+        <div id="livePriceControls" style="display:none;gap:6px;align-items:center">
           <input type="text" id="ticker" value="ADI" placeholder="Ticker" style="width:56px;font-family:monospace;text-transform:uppercase" oninput="this.value=this.value.toUpperCase();saveToStorage()" />
           <input type="text" id="apiKey" placeholder="Finnhub API key" style="flex:1;font-family:monospace;display:none" />
           <button class="fetch-btn" onclick="fetchLivePrice()">🔄 Fetch</button>
@@ -590,7 +590,7 @@
       useLivePrice: document.getElementById('useLivePrice').checked,
       ticker: document.getElementById('ticker').value,
       salePrice: document.getElementById('salePrice').value,
-      refundScope: document.getElementById('refundScope').value
+      refundScope: (document.getElementById('refundScope') || {}).value || 'full'
     };
     localStorage.setItem('esppSimulatorData', JSON.stringify(data));
   }
@@ -1014,7 +1014,7 @@
     const totalTaxA = totalIrpfDiscount + (capitalGain > 0 ? cgTax : 0);
 
     // Net outcome — Strategy B (3 years, refund scope configurable)
-    const refundScope = document.getElementById('refundScope').value;
+    const refundScope = (document.getElementById('refundScope') || {}).value || window._pendingRefundScope || 'full';
     const irpfRefundBase = refundScope === 'full' ? totalDiscount
                          : refundScope === 'discount_only' ? totalDiscountComponent
                          : 0;
@@ -1107,9 +1107,9 @@
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
         <label style="margin:0;white-space:nowrap;font-size:0.82rem">IRPF refund after 3 years <span class="tag">Art. 42.3.f</span></label>
         <select id="refundScope" style="flex:1" onchange="calculate();saveToStorage()">
-          <option value="full">Full income in kind</option>
-          <option value="discount_only">Discount portion only</option>
-          <option value="none">No refund</option>
+          <option value="full"${refundScope==='full'?' selected':''}>Full income in kind</option>
+          <option value="discount_only"${refundScope==='discount_only'?' selected':''}>Discount portion only</option>
+          <option value="none"${refundScope==='none'?' selected':''}>No refund</option>
         </select>
       </div>
 
@@ -1173,11 +1173,8 @@
       document.getElementById('chartsCard').classList.remove('hidden');
     }
 
-    // Restore refundScope if pending (first load — results card just rendered)
-    if (window._pendingRefundScope) {
-      const el = document.getElementById('refundScope');
-      if (el) { el.value = window._pendingRefundScope; window._pendingRefundScope = null; }
-    }
+    // Clear pending refund scope (value already baked into rendered HTML via 'selected')
+    if (window._pendingRefundScope) window._pendingRefundScope = null;
   }
 
   // Strategy info box — static combined explanation
