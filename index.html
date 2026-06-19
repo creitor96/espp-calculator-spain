@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <!-- ESPP Simulator — Spain
-     Version : v1.2.2
-     Date    : 2026-05-13
+     Version : v1.5.0
+     Date    : 2026-05-28
      Author  : Adrian Rosello
-     Changes : Per-period contribution % input; cap changed to min(20% salary, €5,000) per period
+     Changes : Added localStorage to save and restore all user inputs automatically
 -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ESPP Simulator — Spain</title>
+  <title>Online ESPP Simulator</title>
   <link rel="icon" type="image/png" href="logo.png" />
   <style>
     :root {
@@ -66,6 +66,11 @@
       .grid { grid-template-columns: 1fr; }
     }
 
+    .page-content {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -108,6 +113,10 @@
       outline: none;
       transition: border-color 0.2s;
     }
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
 
     input[type="number"]:focus, select:focus {
       border-color: var(--accent);
@@ -335,27 +344,47 @@
 </head>
 <body>
 
-<h1>ESPP Simulator — Spain</h1>
-<p class="subtitle">Employee Stock Purchase Plan · Tax simulation under Spanish regulations (LIRPF Art. 42.3.f) · <span style="opacity:0.5">v1.2.2</span></p>
+<h1>Online ESPP Simulator</h1>
+<p class="subtitle">Tax simulation under Spanish regulations (LIRPF Art. 42.3.f) · <span style="opacity:0.5">v1.5.0</span><br/>
+<span style="font-size:0.75rem;opacity:0.6">💾 Your inputs are saved automatically in your browser</span></p>
 
-<div class="grid">
-
-  <!-- LEFT COL: INPUTS -->
-  <div>
+<div class="page-content">
 
     <!-- Personal data -->
     <div class="card" style="margin-bottom:16px">
       <h2><span class="icon">👤</span> Personal Details</h2>
 
-      <label>Gross annual salary (€)</label>
-      <input type="number" id="salary" value="52000" min="0" step="500" oninput="updatePeriodEuros(1);updatePeriodEuros(2);calculate();" />
-
-      <label>IRPF withholding rate (%) — <a href="https://taxdown.es/irpf/tabla-tramos" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">check your rate ↗</a></label>
-      <div class="range-row">
-        <input type="range" id="irpfRange" min="1" max="47" value="38.5" oninput="syncIrpf(this.value);calculate()" />
-        <input type="number" id="irpf" value="38.5" min="1" max="47" oninput="syncIrpfRange(this.value);calculate()" />
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <label class="sw" style="margin:0;flex-shrink:0;font-size:0.82rem;color:var(--muted)">
+          <input type="checkbox" id="useCashMode" onchange="toggleContributionMode()">
+          <span class="sw-track"><span class="sw-thumb"></span></span>
+          <span>Direct cash</span>
+        </label>
+        <div id="salaryInputs" style="display:flex;align-items:center;gap:8px;flex:1">
+          <label style="margin:0;white-space:nowrap;font-size:0.8rem">Gross annual salary (€)</label>
+          <input type="number" id="salary" value="52000" min="0" step="500" style="flex:1" oninput="updatePeriodEuros(1);updatePeriodEuros(2);calculate();saveToStorage()" />
+        </div>
       </div>
 
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <input type="number" id="irpf" value="38.5" min="18.5" max="54" step="0.5" style="width:72px;flex-shrink:0;text-align:center" oninput="calculate();saveToStorage()" />
+        <label style="margin:0;white-space:nowrap;font-size:0.85rem;flex:1">IRPF withholding rate (%) — <a href="https://taxdown.es/irpf/tabla-tramos" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">check your rate ↗</a></label>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <input type="number" id="discount" value="20" min="0" max="40" step="1" style="width:72px;flex-shrink:0;text-align:center" oninput="calculate();updateInfo();saveToStorage()" />
+        <label style="margin:0;white-space:nowrap;font-size:0.85rem;flex:1">Company discount (%)</label>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <input type="number" id="maxContribPct" value="20" min="1" max="100" step="1" style="width:72px;flex-shrink:0;text-align:center" oninput="calculate();saveToStorage()" />
+        <label style="margin:0;white-space:nowrap;font-size:0.85rem;flex:1">Max contribution (%/year)</label>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <input type="number" id="maxContribEur" value="10000" min="0" step="500" style="width:72px;flex-shrink:0;text-align:center" oninput="calculate();saveToStorage()" />
+        <label style="margin:0;white-space:nowrap;font-size:0.85rem;flex:1">Max contribution (€/year)</label>
+      </div>
 
     </div>
 
@@ -363,65 +392,36 @@
     <div class="card" style="margin-bottom:16px">
       <h2><span class="icon">📈</span> Share Prices</h2>
 
-      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">Enter the share prices for each 6-month period. The company uses the lowest price as the reference.</p>
-
-      <!-- Share prices USD toggle -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <!-- USD toggle + rate on one row -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <label class="sw" style="margin:0;flex-shrink:0;font-size:0.85rem;color:var(--text)">
           <input type="checkbox" id="pricesUSD" checked onchange="updatePricesUI();calculate()">
           <span class="sw-track"><span class="sw-thumb"></span></span>
-          <span>Prices in USD</span>
+          <span>USD</span>
         </label>
-        <div id="pricesUSDControls" style="display:flex;gap:8px;align-items:center;flex:1">
-          <input type="number" id="usdEurRate" value="0.8764" min="0.0001" step="0.0001" style="flex:1" oninput="calculate()" />
-          <button class="fetch-btn" onclick="fetchExchangeRate()">🔄 Fetch</button>
+        <div id="pricesUSDControls" style="display:flex;gap:6px;align-items:center;flex:1">
+          <label class="sw" style="margin:0;flex-shrink:0;font-size:0.82rem;color:var(--muted)">
+            <input type="checkbox" id="liveRate" onchange="updateLiveRateUI()">
+            <span class="sw-track"><span class="sw-thumb"></span></span>
+            <span>Live</span>
+          </label>
+          <input type="number" id="usdEurRate" value="0.8764" min="0.0001" step="0.0001" style="flex:1;min-width:0" oninput="calculate();saveToStorage()" />
+          <button id="fetchRateBtn" class="fetch-btn" style="white-space:nowrap;display:none" onclick="fetchExchangeRate()">🔄 Rate</button>
         </div>
       </div>
-      <div id="rateStatus" style="font-size:0.75rem;color:var(--muted);margin-bottom:14px;min-height:1em"></div>
+      <div id="rateStatus" style="font-size:0.72rem;color:var(--muted);margin-bottom:10px;min-height:1em"></div>
 
-      <div class="period-header" style="display:flex;align-items:center;justify-content:space-between">
-        <span>First Period</span>
-        <label class="sw" style="margin:0;font-size:0.8rem;color:var(--muted)">
-          <input type="checkbox" id="p1_active" checked onchange="togglePeriod(1);calculate()">
-          <span class="sw-track"><span class="sw-thumb"></span></span>
-          <span>Active</span>
-        </label>
+      <!-- Periods list -->
+      <div id="periodsHeader" style="display:flex;gap:12px;padding:0 0 4px 4px;font-size:0.7rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.04em">
+        <span style="width:28px;flex-shrink:0"></span>
+        <span style="width:46px;flex-shrink:0"></span>
+        <span style="flex:2;min-width:80px;max-width:120px;text-align:center">First day (<span class="prices-sym">$</span>)</span>
+        <span style="flex:2;min-width:80px;max-width:120px;text-align:center">Last day (<span class="prices-sym">$</span>)</span>
+        <span style="flex:2;min-width:80px;max-width:120px;text-align:center">Contrib</span>
+        <span style="width:20px;flex-shrink:0"></span>
       </div>
-      <div id="p1_inputs">
-      <label>Share price on first day of the period (<span class="prices-sym">$</span>)</label>
-      <input type="number" id="p1_start" value="219.040" min="0.01" step="0.01" oninput="calculate()" />
-      <label>Share price on last day of the period (<span class="prices-sym">$</span>)</label>
-      <input type="number" id="p1_end" value="222.260" min="0.01" step="0.01" oninput="calculate()" />
-      <label>Salary contribution (%) <span class="tag">≤ 20% · max €5,000/period</span></label>
-      <div class="range-row">
-        <input type="range" id="p1_contribRange" min="1" max="20" value="20" oninput="syncPeriodContrib(1,this.value);calculate()" />
-        <input type="number" id="p1_contrib" value="20" min="1" max="20" step="1" oninput="syncPeriodContribRange(1,this.value);calculate()" />
-      </div>
-      <div id="p1ContribEuros" style="font-size:0.78rem;color:var(--muted);margin-top:6px;"></div>
-      <div id="p1ContribWarning" style="display:none;margin-top:8px;"></div>
-      </div>
-
-      <div class="period-header" style="display:flex;align-items:center;justify-content:space-between">
-        <span>Second Period</span>
-        <label class="sw" style="margin:0;font-size:0.8rem;color:var(--muted)">
-          <input type="checkbox" id="p2_active" onchange="togglePeriod(2);calculate()">
-          <span class="sw-track"><span class="sw-thumb"></span></span>
-          <span>Active</span>
-        </label>
-      </div>
-      <div id="p2_inputs">
-      <label>Share price on first day of the period (<span class="prices-sym">$</span>)</label>
-      <input type="number" id="p2_start" value="227.660" min="0.01" step="0.01" oninput="calculate()" />
-      <label>Share price on last day of the period (<span class="prices-sym">$</span>)</label>
-      <input type="number" id="p2_end" value="281.290" min="0.01" step="0.01" oninput="calculate()" />
-      <label>Salary contribution (%) <span class="tag">≤ 20% · max €5,000/period</span></label>
-      <div class="range-row">
-        <input type="range" id="p2_contribRange" min="1" max="20" value="20" oninput="syncPeriodContrib(2,this.value);calculate()" />
-        <input type="number" id="p2_contrib" value="20" min="1" max="20" step="1" oninput="syncPeriodContribRange(2,this.value);calculate()" />
-      </div>
-      <div id="p2ContribEuros" style="font-size:0.78rem;color:var(--muted);margin-top:6px;"></div>
-      <div id="p2ContribWarning" style="display:none;margin-top:8px;"></div>
-      </div>
+      <div id="periodsContainer"></div>
+      <button onclick="addPeriod()" style="margin-top:10px;width:100%;padding:7px;border:1px dashed var(--border);border-radius:6px;background:transparent;color:var(--muted);cursor:pointer;font-size:0.82rem;letter-spacing:0.02em" onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">+ Add Period</button>
     </div>
 
     <!-- Sale simulation -->
@@ -429,80 +429,265 @@
       <h2><span class="icon">💸</span> Sale Simulation</h2>
 
       <!-- Live price row -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <label class="sw" style="margin:0;flex-shrink:0;font-size:0.85rem;color:var(--text)">
           <input type="checkbox" id="useLivePrice" onchange="updateLivePriceUI()">
           <span class="sw-track"><span class="sw-thumb"></span></span>
-          <span>Live price</span>
+          <span>Live</span>
         </label>
-        <div id="livePriceControls" style="display:flex;gap:8px;align-items:center;flex:1">
-          <input type="text" id="ticker" value="ADI" placeholder="Ticker" style="flex:1;font-family:monospace;text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" />
+        <input type="number" id="salePrice" value="222.26" min="0.01" step="0.01" style="flex:1;min-width:0" oninput="document.getElementById('useLivePrice').checked=false;updateLivePriceUI();calculate();saveToStorage()" />
+        <span style="font-size:0.78rem;color:var(--muted);white-space:nowrap"><span id="currencySymbol">$</span>/share</span>
+        <div id="livePriceControls" style="display:none;flex;gap:6px;align-items:center">
+          <input type="text" id="ticker" value="ADI" placeholder="Ticker" style="width:56px;font-family:monospace;text-transform:uppercase" oninput="this.value=this.value.toUpperCase();saveToStorage()" />
           <input type="text" id="apiKey" placeholder="Finnhub API key" style="flex:1;font-family:monospace;display:none" />
           <button class="fetch-btn" onclick="fetchLivePrice()">🔄 Fetch</button>
         </div>
       </div>
       <div id="fetchStatus" style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;min-height:1.2em"></div>
 
-      <label>Sale price per share (<span id="currencySymbol">$</span>)</label>
-      <input type="number" id="salePrice" value="222.26" min="0.01" step="0.01" oninput="document.getElementById('useLivePrice').checked=false;updateLivePriceUI();calculate()" />
-
-      <label>When do you sell? <span class="tag">affects the strategy</span></label>
-      <select id="saleStrategy" onchange="calculate()">
-        <option value="fast">Quick sale (shortly after the period closes)</option>
-        <option value="3year">Wait 3 years (request IRPF refund on 20% discount)</option>
-      </select>
-
       <div class="info-box" id="strategyInfo"></div>
     </div>
 
+  <!-- RESULTS -->
+  <div class="card" id="resultsCard" style="margin-bottom:16px">
+    <h2><span class="icon">📊</span> Results</h2>
+    <p style="color:var(--muted);font-size:0.85rem">Results update automatically as you change the inputs.</p>
   </div>
 
-  <!-- RIGHT COL: RESULTS -->
-  <div>
-    <div class="card" id="resultsCard">
-      <h2><span class="icon">📊</span> Results</h2>
-      <p style="color:var(--muted);font-size:0.85rem">Results update automatically as you change the inputs.</p>
-    </div>
+  <!-- CHARTS -->
+  <div class="card hidden" id="chartsCard" style="margin-bottom:16px">
+    <h2><span class="icon">📉</span> Charts &amp; Analysis</h2>
+    <div class="period-header" style="margin-top:0">Strategy Comparison</div>
+    <div id="chartStrategyComparison"></div>
+    <hr class="divider" />
+    <div class="period-header">Money Flow — Quick Sale</div>
+    <div id="chartWaterfall"></div>
+    <hr class="divider" />
+    <div class="period-header">Break-Even Analysis</div>
+    <div id="chartBreakEven"></div>
   </div>
 
-</div><!-- /grid -->
+</div><!-- /page-content -->
+
+<script src="espp-calculations.js"></script>
 
 <script>
-  function syncIrpf(v) { document.getElementById('irpf').value = v; }
-  function syncIrpfRange(v) { document.getElementById('irpfRange').value = v; }
+  // ========== PERIOD STATE ==========
+  let periodIdCounter = 0;
+  let periodIds = [];
 
-  function togglePeriod(n) {
-    const active = document.getElementById('p' + n + '_active').checked;
-    const inputs = document.getElementById('p' + n + '_inputs');
-    if (n === 2) {
-      inputs.style.display = active ? '' : 'none';
-    } else {
-      inputs.style.opacity = active ? '1' : '0.35';
-      inputs.querySelectorAll('input').forEach(el => el.disabled = !active);
+  function buildPeriodHTML(id, n, data) {
+    const isUSD = document.getElementById('pricesUSD') ? document.getElementById('pricesUSD').checked : true;
+    const sym = isUSD ? '$' : '€';
+    const activeEl = data.active !== undefined ? data.active : true;
+    const startVal   = data.start   !== undefined ? data.start   : '';
+    const endVal     = data.end     !== undefined ? data.end     : '';
+    const contribVal = data.contrib !== undefined ? data.contrib : '20';
+    const cashVal    = data.cash    !== undefined ? data.cash    : '5000';
+    return `
+      <div id="p${id}_row" style="display:flex;align-items:center;gap:12px;padding:4px 0 4px 4px;flex-wrap:nowrap">
+        <label class="sw" style="margin:0;flex-shrink:0">
+          <input type="checkbox" id="p${id}_active" ${activeEl ? 'checked' : ''} onchange="togglePeriodActive(${id})">
+          <span class="sw-track"><span class="sw-thumb"></span></span>
+        </label>
+        <span id="p${id}_label" style="font-size:0.78rem;font-weight:600;color:var(--accent2);white-space:nowrap;width:46px;flex-shrink:0">Period ${n}</span>
+        <input type="number" id="p${id}_start" value="${startVal}" min="0.01" step="0.01" style="flex:2;min-width:80px;max-width:120px;text-align:center" oninput="calculate();saveToStorage()" />
+        <input type="number" id="p${id}_end" value="${endVal}" min="0.01" step="0.01" style="flex:2;min-width:80px;max-width:120px;text-align:center" oninput="calculate();saveToStorage()" />
+        <div id="p${id}_contribSalaryMode" style="display:flex;align-items:center;gap:4px;flex:2;min-width:80px;max-width:120px;justify-content:center">
+          <input type="number" id="p${id}_contrib" value="${contribVal}" min="1" max="20" step="1" style="width:46px;text-align:center;padding:6px 4px" oninput="syncPeriodContribRange(${id},this.value);calculate()" />
+          <label style="margin:0;font-size:0.72rem;color:var(--muted)">%</label>
+          <label style="margin:0;font-size:0.72rem;color:var(--muted)">·</label>
+          <span id="p${id}ContribEuros" style="font-size:0.7rem;color:var(--muted);white-space:nowrap"></span>
+        </div>
+        <div id="p${id}_contribCashMode" style="display:none;align-items:center;gap:4px;flex:2;min-width:80px;max-width:120px;justify-content:center">
+          <input type="number" id="p${id}_cash" value="${cashVal}" min="0" step="100" style="flex:1;text-align:center;padding:6px 4px" oninput="calculate();saveToStorage()" />
+          <label style="margin:0;font-size:0.72rem;color:var(--muted)">€</label>
+        </div>
+        <button id="p${id}_removeBtn" onclick="removePeriod(${id})" title="Remove period"
+          style="flex-shrink:0;width:20px;height:20px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0">×</button>
+        <span id="p${id}ContribWarning" style="display:none;font-size:0.7rem;color:var(--yellow);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+      </div>
+    `;
+  }
+
+  function addPeriod(data) {
+    if (!data) data = {};
+    const id = ++periodIdCounter;
+    periodIds.push(id);
+    const n = periodIds.length;
+    const container = document.getElementById('periodsContainer');
+    const div = document.createElement('div');
+    div.id = 'period-' + id;
+    if (n > 1) div.style.borderTop = '1px solid var(--border)';
+    div.innerHTML = buildPeriodHTML(id, n, data);
+    container.appendChild(div);
+    const cashMode = document.getElementById('useCashMode') ? document.getElementById('useCashMode').checked : false;
+    const salaryEl = document.getElementById('p'+id+'_contribSalaryMode');
+    const cashEl   = document.getElementById('p'+id+'_contribCashMode');
+    if (salaryEl) salaryEl.style.display = cashMode ? 'none' : 'flex';
+    if (cashEl)   cashEl.style.display   = cashMode ? 'flex' : 'none';
+    updateRemoveButtons();
+    updatePeriodEuros(id);
+  }
+
+  function removePeriod(id) {
+    if (periodIds.length <= 1) return;
+    periodIds = periodIds.filter(x => x !== id);
+    const el = document.getElementById('period-' + id);
+    if (el) el.remove();
+    renumberPeriods();
+    updateRemoveButtons();
+    saveToStorage();
+    calculate();
+  }
+
+  function renumberPeriods() {
+    periodIds.forEach((id, idx) => {
+      const label = document.getElementById('p'+id+'_label');
+      if (label) label.textContent = 'Period ' + (idx + 1);
+      const div = document.getElementById('period-' + id);
+      if (div) div.style.borderTop = idx > 0 ? '1px solid var(--border)' : '';
+    });
+  }
+
+  function updateRemoveButtons() {
+    periodIds.forEach(id => {
+      const btn = document.getElementById('p'+id+'_removeBtn');
+      if (btn) btn.style.opacity = periodIds.length > 1 ? '1' : '0.25';
+    });
+  }
+
+  function togglePeriodActive(id) {
+    const active = document.getElementById('p'+id+'_active').checked;
+    const row = document.getElementById('p'+id+'_row');
+    if (row) {
+      row.querySelectorAll('input:not(#p'+id+'_active),button').forEach(el => el.disabled = !active);
+      row.style.opacity = active ? '1' : '0.45';
+    }
+    saveToStorage();
+    calculate();
+  }
+
+  // ========== LOCAL STORAGE ==========
+  function saveToStorage() {
+    const data = {
+      useCashMode: document.getElementById('useCashMode').checked,
+      salary: document.getElementById('salary').value,
+      irpf: document.getElementById('irpf').value,
+      discount: document.getElementById('discount').value,
+      pricesUSD: document.getElementById('pricesUSD').checked,
+      liveRate: document.getElementById('liveRate').checked,
+      usdEurRate: document.getElementById('usdEurRate').value,
+      periods: periodIds.map(id => ({
+        start:   (document.getElementById('p'+id+'_start')  || {}).value || '',
+        end:     (document.getElementById('p'+id+'_end')    || {}).value || '',
+        contrib: (document.getElementById('p'+id+'_contrib')|| {}).value || '20',
+        cash:    (document.getElementById('p'+id+'_cash')   || {}).value || '5000',
+        active:  (document.getElementById('p'+id+'_active') || {checked: true}).checked,
+      })),
+      maxContribPct: document.getElementById('maxContribPct').value,
+      maxContribEur: document.getElementById('maxContribEur').value,
+      useLivePrice: document.getElementById('useLivePrice').checked,
+      ticker: document.getElementById('ticker').value,
+      salePrice: document.getElementById('salePrice').value,
+      refundScope: document.getElementById('refundScope').value
+    };
+    localStorage.setItem('esppSimulatorData', JSON.stringify(data));
+  }
+
+  function loadFromStorage() {
+    const saved = localStorage.getItem('esppSimulatorData');
+    try {
+      const data = saved ? JSON.parse(saved) : {};
+
+      if (data.useCashMode !== undefined) document.getElementById('useCashMode').checked = data.useCashMode;
+      if (data.pricesUSD !== undefined) document.getElementById('pricesUSD').checked = data.pricesUSD;
+      if (data.liveRate !== undefined) document.getElementById('liveRate').checked = data.liveRate;
+      if (data.useLivePrice !== undefined) document.getElementById('useLivePrice').checked = data.useLivePrice;
+
+      if (data.salary) document.getElementById('salary').value = data.salary;
+      if (data.irpf) document.getElementById('irpf').value = data.irpf;
+      if (data.discount) document.getElementById('discount').value = data.discount;
+      if (data.usdEurRate) document.getElementById('usdEurRate').value = data.usdEurRate;
+      if (data.maxContribPct) document.getElementById('maxContribPct').value = data.maxContribPct;
+      if (data.maxContribEur) document.getElementById('maxContribEur').value = data.maxContribEur;
+      if (data.ticker) document.getElementById('ticker').value = data.ticker;
+      if (data.salePrice) document.getElementById('salePrice').value = data.salePrice;
+      // refundScope is in the dynamically rendered results card — stored for post-calculate restore
+      window._pendingRefundScope = data.refundScope || null;
+
+      // Restore periods (new format) or fall back to legacy p1/p2
+      document.getElementById('periodsContainer').innerHTML = '';
+      periodIds = [];
+      periodIdCounter = 0;
+
+      if (data.periods && Array.isArray(data.periods) && data.periods.length > 0) {
+        data.periods.forEach(p => addPeriod(p));
+      } else {
+        // Legacy format
+        addPeriod({ start: data.p1_start || '219.040', end: data.p1_end || '222.260', contrib: data.p1_contrib || '20', cash: data.p1_cash || '5000' });
+        if (data.p2_start) addPeriod({ start: data.p2_start, end: data.p2_end || '', contrib: data.p2_contrib || '20', cash: data.p2_cash || '5000' });
+        else addPeriod({ start: '227.660', end: '281.290', contrib: '20', cash: '5000' });
+      }
+
+      toggleContributionMode();
+      updatePricesUI();
+      updateLiveRateUI();
+      updateLivePriceUI();
+      periodIds.forEach(id => updatePeriodEuros(id));
+    } catch (e) {
+      console.error('Error loading saved data:', e);
     }
   }
 
+  // ========== SYNC FUNCTIONS ==========
+  function syncIrpf(v) { document.getElementById('irpf').value = v; saveToStorage(); }
+  function syncIrpfRange(v) { document.getElementById('irpfRange').value = v; saveToStorage(); }
+  function syncDiscount(v) { document.getElementById('discount').value = v; saveToStorage(); }
+  function syncDiscountRange(v) { document.getElementById('discountRange').value = v; saveToStorage(); }
+
+  function toggleContributionMode() {
+    const cashMode = document.getElementById('useCashMode').checked;
+    document.getElementById('salaryInputs').style.display = cashMode ? 'none' : 'flex';
+    periodIds.forEach(id => {
+      const sal = document.getElementById('p'+id+'_contribSalaryMode');
+      const cas = document.getElementById('p'+id+'_contribCashMode');
+      if (sal) sal.style.display = cashMode ? 'none' : 'flex';
+      if (cas) cas.style.display = cashMode ? 'flex' : 'none';
+    });
+    if (!cashMode) periodIds.forEach(id => updatePeriodEuros(id));
+    saveToStorage();
+    calculate();
+  }
+
+  function togglePeriod() {} // legacy no-op
+
   function syncPeriodContrib(n, v) {
-    document.getElementById('p'+n+'_contrib').value = v;
+    const el = document.getElementById('p'+n+'_contrib');
+    if (el) el.value = v;
     updatePeriodEuros(n);
+    saveToStorage();
   }
   function syncPeriodContribRange(n, v) {
-    document.getElementById('p'+n+'_contribRange').value = v;
+    const el = document.getElementById('p'+n+'_contribRange');
+    if (el) el.value = v;
     updatePeriodEuros(n);
+    saveToStorage();
   }
   function updatePeriodEuros(n) {
     const salary = parseFloat(document.getElementById('salary').value) || 0;
-    const pct    = parseFloat(document.getElementById('p'+n+'_contrib').value) || 0;
+    const el = document.getElementById('p'+n+'_contrib');
+    const pct    = el ? (parseFloat(el.value) || 0) : 0;
     const raw    = salary * (pct / 100);
-    const capped = Math.min(raw, 5000);
+    const capped = Math.min(raw, (parseFloat((document.getElementById('maxContribEur')||{}).value)||10000) / 2);
+    const capVal  = (parseFloat((document.getElementById('maxContribEur')||{}).value)||10000) / 2;
     const elE = document.getElementById('p'+n+'ContribEuros');
-    if (elE) elE.textContent = `→ €${capped.toLocaleString('en-GB', {minimumFractionDigits:2,maximumFractionDigits:2})} / period`;
+    if (elE) elE.textContent = `€${capped.toLocaleString('en-GB', {minimumFractionDigits:0,maximumFractionDigits:0})}`;
     const warn = document.getElementById('p'+n+'ContribWarning');
     if (warn) {
-      if (raw > 5000) {
-        warn.style.display = 'block';
-        warn.className = 'warning';
-        warn.textContent = `⚠️ Your contribution (€${raw.toLocaleString('en-GB', {minimumFractionDigits:2,maximumFractionDigits:2})}) exceeds the €5,000 period limit. It has been capped at €5,000.00.`;
+      if (raw > capVal) {
+        warn.style.display = 'inline';
+        warn.textContent = `⚠️ capped at €${capVal.toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
       } else {
         warn.style.display = 'none';
       }
@@ -516,6 +701,7 @@
     const ctrl = document.getElementById('pricesUSDControls');
     ctrl.style.opacity = isUSD ? '1' : '0.35';
     ctrl.querySelectorAll('input,button').forEach(el => el.disabled = !isUSD);
+    saveToStorage();
   }
 
   function getSharePriceEur(raw) {
@@ -527,15 +713,28 @@
   function updateLivePriceUI() {
     const live = document.getElementById('useLivePrice').checked;
     const ctrl = document.getElementById('livePriceControls');
-    ctrl.style.opacity = live ? '1' : '0.35';
-    ctrl.querySelectorAll('input,button').forEach(el => el.disabled = !live);
+    ctrl.style.display = live ? 'flex' : 'none';
+    const salePriceEl = document.getElementById('salePrice');
+    salePriceEl.disabled = live;
+    salePriceEl.style.opacity = live ? '0.45' : '1';
+    saveToStorage();
+    if (live) fetchLivePrice();
+  }
+
+  function updateLiveRateUI() {
+    const live = document.getElementById('liveRate').checked;
+    const rateInput = document.getElementById('usdEurRate');
+    const fetchBtn = document.getElementById('fetchRateBtn');
+    rateInput.disabled = live;
+    rateInput.style.opacity = live ? '0.45' : '1';
+    fetchBtn.style.display = live ? '' : 'none';
+    if (live) fetchExchangeRate();
   }
 
   function updateCurrencyUI() {
     const isUSD = document.getElementById('pricesUSD').checked;
     const ctrl = document.getElementById('pricesUSDControls');
-    ctrl.style.opacity = isUSD ? '1' : '0.35';
-    ctrl.querySelectorAll('input,button').forEach(el => el.disabled = !isUSD);
+    ctrl.style.display = isUSD ? 'flex' : 'none';
     document.getElementById('currencySymbol').textContent = isUSD ? '$' : '€';
   }
 
@@ -570,10 +769,14 @@
       // Save key if user entered a custom one
       if (keyInput.value.trim()) localStorage.setItem('finnhubKey', keyInput.value.trim());
       keyInput.style.display = 'none';
-      document.getElementById('salePrice').value = price.toFixed(2);
+      const salePriceEl = document.getElementById('salePrice');
+      salePriceEl.disabled = true;
+      salePriceEl.style.opacity = '0.45';
+      salePriceEl.value = price.toFixed(2);
       document.getElementById('pricesUSD').checked = true;
       updateCurrencyUI();
       updatePricesUI();
+      saveToStorage();
       statusEl.style.color = 'var(--green)';
       statusEl.textContent = `✓ ${ticker}: USD ${price.toFixed(2)} (live)`;
       calculate();
@@ -609,6 +812,7 @@
         document.getElementById('usdEurRate').value = rate.toFixed(4);
         statusEl.style.color = 'var(--green)';
         statusEl.textContent = `✓ 1 USD = ${rate.toFixed(4)} EUR`;
+        saveToStorage();
         calculate();
         return;
       } catch(e) { /* try next */ }
@@ -617,73 +821,188 @@
     statusEl.textContent = '✗ Could not fetch rate. Enter manually.';
   }
 
-  // Capital gains tax (base del ahorro, Spain 2025)
-  function capitalGainsTax(gain) {
-    if (gain <= 0) return 0;
-    let tax = 0;
-    const brackets = [
-      [6000,    0.19],
-      [44000,   0.21],
-      [150000,  0.23],
-      [100000,  0.27],
-      [Infinity, 0.30]
+  // capitalGainsTax, fmt, fmtE, calcPeriod — loaded from espp-calculations.js
+
+  function updateRefundScopeVisibility() {} // no-op, refund scope is always visible
+
+  // ========== CHARTS ==========
+
+  function renderStrategyChart({ netA, netB, totalTaxA, totalTaxB, totalContribution, totalIrpfDiscount }) {
+    const el = document.getElementById('chartStrategyComparison');
+    if (!el || totalContribution <= 0) return;
+    const W = 660, H = 120, padL = 10, padR = 230, barH = 32, gap = 20;
+    const plotW = W - padL - padR;
+    const maxAbs = Math.max(Math.abs(netA), Math.abs(netB), 1);
+    const scaleW = plotW / (maxAbs * 1.05);
+    const bWA = Math.max(3, Math.abs(netA) * scaleW);
+    const bWB = Math.max(3, Math.abs(netB) * scaleW);
+    const colA = netA >= 0 ? '#22c55e' : '#ef4444';
+    const colB = netB >= 0 ? '#22c55e' : '#ef4444';
+    const yA = 22, yB = yA + barH + gap + 14;
+    const lX = W - padR + 10;
+    const f0 = n => (n >= 0 ? '+' : '−') + '€' + Math.round(Math.abs(n)).toLocaleString('en-GB');
+    const retA = totalContribution + totalIrpfDiscount > 0 ? ((netA / (totalContribution + totalIrpfDiscount)) * 100).toFixed(1) : '—';
+    const retB = totalContribution > 0 ? ((netB / totalContribution) * 100).toFixed(1) : '—';
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
+      <text x="${padL}" y="${yA - 6}" fill="#8892a4" font-size="11" font-family="'Segoe UI',system-ui,sans-serif">⚡ Quick Sale</text>
+      <rect x="${padL}" y="${yA}" width="${bWA.toFixed(1)}" height="${barH}" rx="4" fill="${colA}" opacity="0.8"/>
+      <text x="${lX}" y="${yA + barH / 2 + 4}" fill="#e2e8f0" font-size="13" font-weight="bold" font-family="'Segoe UI',system-ui,sans-serif">${f0(netA)}  (${retA}%)</text>
+      <text x="${lX}" y="${yA + barH / 2 + 18}" fill="#8892a4" font-size="10" font-family="'Segoe UI',system-ui,sans-serif">Taxes: €${Math.round(totalTaxA).toLocaleString('en-GB')}</text>
+      <text x="${padL}" y="${yB - 6}" fill="#8892a4" font-size="11" font-family="'Segoe UI',system-ui,sans-serif">🕐 Wait 3 Years</text>
+      <rect x="${padL}" y="${yB}" width="${bWB.toFixed(1)}" height="${barH}" rx="4" fill="${colB}" opacity="0.8"/>
+      <text x="${lX}" y="${yB + barH / 2 + 4}" fill="#e2e8f0" font-size="13" font-weight="bold" font-family="'Segoe UI',system-ui,sans-serif">${f0(netB)}  (${retB}%)</text>
+      <text x="${lX}" y="${yB + barH / 2 + 18}" fill="#8892a4" font-size="10" font-family="'Segoe UI',system-ui,sans-serif">Taxes: €${Math.round(totalTaxB).toLocaleString('en-GB')}</text>
+    </svg>`;
+  }
+
+  function renderWaterfallChart({ totalContribution, totalIrpfDiscount, totalSaleValue, capitalGain, cgTax, netA }) {
+    const el = document.getElementById('chartWaterfall');
+    if (!el || totalContribution <= 0) return;
+    const W = 660, H = 230, padL = 58, padR = 12, padT = 18, padB = 44;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const cgTaxVal = capitalGain > 0 ? cgTax : 0;
+    const rawSteps = [
+      { label: 'Contribution', delta: -totalContribution, col: '#ef4444' },
+      { label: 'IRPF withheld', delta: -totalIrpfDiscount, col: '#ef4444' },
+      { label: 'Sale proceeds', delta: totalSaleValue, col: '#22c55e' },
+      { label: 'CG tax', delta: -cgTaxVal, col: cgTaxVal > 0 ? '#f59e0b' : '#8892a4' },
     ];
-    let remaining = gain;
-    for (const [limit, rate] of brackets) {
-      if (remaining <= 0) break;
-      const chunk = Math.min(remaining, limit);
-      tax += chunk * rate;
-      remaining -= chunk;
+    let cum = 0;
+    const bars = rawSteps.map(s => { const from = cum; cum += s.delta; return { ...s, from, to: cum }; });
+    bars.push({ label: 'Net result', from: 0, to: netA, delta: netA, col: netA >= 0 ? '#4f8ef7' : '#ef4444', isNet: true });
+    const allVals = bars.flatMap(b => [b.from, b.to, 0]);
+    const yMin = Math.min(...allVals), yMax = Math.max(...allVals);
+    const yRange = yMax - yMin || 1;
+    const toY = v => padT + ((yMax - v) / yRange) * plotH;
+    const zeroY = toY(0);
+    const colW = plotW / bars.length;
+    const barW = colW * 0.58, barOff = (colW - barW) / 2;
+    let grid = '', rects = '', lbls = '', connectors = '';
+    for (let i = 0; i <= 4; i++) {
+      const v = yMin + yRange * i / 4, y = toY(v);
+      const lbl = Math.abs(v) >= 1000 ? (v < 0 ? '−' : '') + (Math.round(Math.abs(v) / 100) / 10) + 'k' : Math.round(v);
+      grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#1e2235" stroke-width="1"/>`;
+      grid += `<text x="${padL - 4}" y="${(y + 4).toFixed(1)}" text-anchor="end" fill="#8892a4" font-size="9" font-family="'Segoe UI',system-ui,sans-serif">€${lbl}</text>`;
     }
-    return tax;
+    grid += `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${W - padR}" y2="${zeroY.toFixed(1)}" stroke="#2e3350" stroke-width="1.5"/>`;
+    bars.forEach((b, i) => {
+      const x = padL + i * colW + barOff;
+      const yTop = toY(Math.max(b.from, b.to)), yBot = toY(Math.min(b.from, b.to));
+      const bH = Math.max(2, yBot - yTop);
+      rects += `<rect x="${x.toFixed(1)}" y="${yTop.toFixed(1)}" width="${barW.toFixed(1)}" height="${bH.toFixed(1)}" rx="3" fill="${b.col}" opacity="0.85"/>`;
+      const vStr = (b.delta >= 0 ? '+' : '−') + '€' + Math.round(Math.abs(b.delta)).toLocaleString('en-GB');
+      const vY = b.delta >= 0 ? yTop - 5 : yBot + 12;
+      rects += `<text x="${(x + barW / 2).toFixed(1)}" y="${vY.toFixed(1)}" text-anchor="middle" fill="${b.col}" font-size="9" font-weight="bold" font-family="'Segoe UI',system-ui,sans-serif">${vStr}</text>`;
+      lbls += `<text x="${(padL + i * colW + colW / 2).toFixed(1)}" y="${H - padB + 14}" text-anchor="middle" fill="#8892a4" font-size="9" font-family="'Segoe UI',system-ui,sans-serif">${b.label}</text>`;
+      if (!b.isNet && i < bars.length - 2) {
+        const nX = padL + (i + 1) * colW + barOff;
+        const cY = toY(b.to);
+        connectors += `<line x1="${(x + barW).toFixed(1)}" y1="${cY.toFixed(1)}" x2="${nX.toFixed(1)}" y2="${cY.toFixed(1)}" stroke="#2e3350" stroke-dasharray="3,2" stroke-width="1"/>`;
+      }
+    });
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${grid}${connectors}${rects}${lbls}</svg>`;
   }
 
-  function fmt(n, decimals = 2) {
-    return (n ?? 0).toLocaleString('en-GB', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-  }
-
-  function fmtE(n, decimals = 2) { return '€' + fmt(n, decimals); }
-
-  function calcPeriod(contribution, startPrice, endPrice, irpfRate) {
-    const refPrice = Math.min(startPrice, endPrice);
-    const purchasePrice = refPrice * 0.80;
-    const shares = contribution / purchasePrice;
-    const marketValue = shares * refPrice;
-    const discount = marketValue - contribution; // = shares * refPrice * 0.20
-    const irpfOnDiscount = discount * (irpfRate / 100);
-    const acquisitionValue = marketValue; // fiscal cost basis
-
-    return { contribution, refPrice, purchasePrice, shares, marketValue, discount, irpfOnDiscount, acquisitionValue };
+  function renderBreakEvenChart({ totalShares, totalContribution, totalIrpfDiscount, irpfRefund, totalAcquisitionVal, salePrice }) {
+    const el = document.getElementById('chartBreakEven');
+    if (!el || totalShares <= 0) return;
+    const W = 660, H = 260, padL = 62, padR = 20, padT = 28, padB = 48;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const acqPPS = totalAcquisitionVal / totalShares;
+    const xMin = Math.max(0.01, acqPPS * 0.35), xMax = acqPPS * 2.4;
+    const pts = Array.from({ length: 161 }, (_, i) => {
+      const p = xMin + (xMax - xMin) * i / 160;
+      const sv = totalShares * p, gain = sv - totalAcquisitionVal;
+      const taxCG = gain > 0 ? capitalGainsTax(gain) : 0;
+      return { p, nA: sv - totalContribution - totalIrpfDiscount - taxCG,
+                  nB: sv - totalContribution - totalIrpfDiscount + irpfRefund - taxCG };
+    });
+    const allNets = pts.flatMap(p => [p.nA, p.nB]);
+    const yMin = Math.min(...allNets), yMax = Math.max(...allNets), yRange = yMax - yMin || 1;
+    const toX = p => padL + ((p - xMin) / (xMax - xMin)) * plotW;
+    const toY = n => padT + ((yMax - n) / yRange) * plotH;
+    const pathA = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(p.p).toFixed(1)},${toY(p.nA).toFixed(1)}`).join(' ');
+    const pathB = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${toX(p.p).toFixed(1)},${toY(p.nB).toFixed(1)}`).join(' ');
+    const zeroY = toY(0);
+    let grid = '', xLbls = '', yLbls = '';
+    for (let i = 0; i <= 5; i++) {
+      const n = yMin + yRange * i / 5, y = toY(n);
+      const lbl = Math.abs(n) >= 1000 ? (n < 0 ? '−' : '+') + (Math.round(Math.abs(n) / 100) / 10) + 'k' : (n >= 0 ? '+' : '−') + Math.round(Math.abs(n));
+      grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#1e2235" stroke-width="1"/>`;
+      yLbls += `<text x="${padL - 4}" y="${(y + 4).toFixed(1)}" text-anchor="end" fill="#8892a4" font-size="9" font-family="'Segoe UI',system-ui,sans-serif">€${lbl}</text>`;
+    }
+    for (let i = 0; i <= 6; i++) {
+      const p = xMin + (xMax - xMin) * i / 6, x = toX(p);
+      grid += `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${H - padB}" stroke="#1e2235" stroke-width="1"/>`;
+      xLbls += `<text x="${x.toFixed(1)}" y="${H - padB + 14}" text-anchor="middle" fill="#8892a4" font-size="9" font-family="'Segoe UI',system-ui,sans-serif">€${p.toFixed(2)}</text>`;
+    }
+    const zLine = `<line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${W - padR}" y2="${zeroY.toFixed(1)}" stroke="#3a4060" stroke-width="1.5"/>`;
+    let markers = '';
+    const addMarker = (p, col, label, above) => {
+      if (p < xMin || p > xMax) return;
+      const x = toX(p);
+      markers += `<line x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${H - padB}" stroke="${col}" stroke-width="1" stroke-dasharray="3,3" opacity="0.65"/>`;
+      const lY = above ? padT - 7 : H - padB + 26;
+      markers += `<text x="${x.toFixed(1)}" y="${lY}" text-anchor="middle" fill="${col}" font-size="9" font-family="'Segoe UI',system-ui,sans-serif" opacity="0.9">${label}</text>`;
+    };
+    const beA = (totalContribution + totalIrpfDiscount) / totalShares;
+    const beB = (totalContribution + totalIrpfDiscount - irpfRefund) / totalShares;
+    addMarker(beA, '#ef4444', 'B/E (A)', false);
+    addMarker(beB, '#7c5cfc', 'B/E (B)', true);
+    addMarker(acqPPS, '#8892a4', 'acq. price', false);
+    if (salePrice >= xMin && salePrice <= xMax) addMarker(salePrice, '#4f8ef7', 'current', true);
+    const legX = padL + 8;
+    const leg = `<line x1="${legX}" y1="${padT + 8}" x2="${legX + 20}" y2="${padT + 8}" stroke="#4f8ef7" stroke-width="2.5"/>
+      <text x="${legX + 24}" y="${padT + 12}" fill="#8892a4" font-size="9" font-family="'Segoe UI',system-ui,sans-serif">Quick Sale</text>
+      <line x1="${legX}" y1="${padT + 22}" x2="${legX + 20}" y2="${padT + 22}" stroke="#7c5cfc" stroke-width="2.5"/>
+      <text x="${legX + 24}" y="${padT + 26}" fill="#8892a4" font-size="9" font-family="'Segoe UI',system-ui,sans-serif">Wait 3 Years</text>`;
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${grid}${yLbls}${zLine}${markers}<path d="${pathA}" fill="none" stroke="#4f8ef7" stroke-width="2.5"/><path d="${pathB}" fill="none" stroke="#7c5cfc" stroke-width="2.5"/>${leg}${xLbls}</svg>`;
   }
 
   function calculate() {
     const salary         = parseFloat(document.getElementById('salary').value) || 0;
     const irpfRate       = parseFloat(document.getElementById('irpf').value) || 0;
-    const p1Active = document.getElementById('p1_active').checked;
-    const p2Active = document.getElementById('p2_active').checked;
-
-    const p1_start       = getSharePriceEur(parseFloat(document.getElementById('p1_start').value) || 0);
-    const p1_end         = getSharePriceEur(parseFloat(document.getElementById('p1_end').value) || 0);
-    const p2_start       = getSharePriceEur(parseFloat(document.getElementById('p2_start').value) || 0);
-    const p2_end         = getSharePriceEur(parseFloat(document.getElementById('p2_end').value) || 0);
+    const discountPct    = parseFloat(document.getElementById('discount').value) || 20;
+    const cashMode       = document.getElementById('useCashMode').checked;
     const salePrice      = getSalePriceEur();
-    const strategy       = document.getElementById('saleStrategy').value;
+    const maxContribPct = parseFloat(document.getElementById('maxContribPct').value) || 20;
+    const maxContribEur = parseFloat(document.getElementById('maxContribEur').value) || 10000;
+    const maxPerPeriod   = Math.min(salary * (maxContribPct / 100), maxContribEur / 2);
 
-    // Per-period contribution cap: min(20% of annual salary, €5,000)
-    const maxPerPeriod   = Math.min(salary * 0.20, 5000);
-    const p1ContribPct   = parseFloat(document.getElementById('p1_contrib').value) || 0;
-    const p2ContribPct   = parseFloat(document.getElementById('p2_contrib').value) || 0;
-    const p1Contrib      = Math.min(salary * (p1ContribPct / 100), maxPerPeriod);
-    const p2Contrib      = Math.min(salary * (p2ContribPct / 100), maxPerPeriod);
+    // Gather per-period results (skip inactive)
+    const periodResults = periodIds
+      .filter(id => { const el = document.getElementById('p'+id+'_active'); return !el || el.checked; })
+      .map(id => {
+      const startRaw = parseFloat((document.getElementById('p'+id+'_start') || {}).value) || 0;
+      const endRaw   = parseFloat((document.getElementById('p'+id+'_end')   || {}).value) || 0;
+      const start    = getSharePriceEur(startRaw);
+      const end      = getSharePriceEur(endRaw);
+      let contrib;
+      if (cashMode) {
+        const cash = parseFloat((document.getElementById('p'+id+'_cash') || {}).value) || 0;
+        contrib = Math.min(cash, maxContribEur / 2);
+        const warn = document.getElementById('p'+id+'ContribWarning');
+        if (warn) {
+          if (cash > maxContribEur / 2) {
+            warn.style.display = 'inline';
+            warn.textContent = `⚠️ capped at €${(maxContribEur/2).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
+          } else { warn.style.display = 'none'; }
+        }
+      } else {
+        const pct = parseFloat((document.getElementById('p'+id+'_contrib') || {}).value) || 0;
+        contrib = Math.min(salary * (pct / 100), maxPerPeriod);
+      }
+      return calcPeriod(contrib, start, end, irpfRate, discountPct);
+    });
 
-    const p1 = p1Active ? calcPeriod(p1Contrib, p1_start, p1_end, irpfRate) : { contribution:0, refPrice:0, purchasePrice:0, shares:0, marketValue:0, discount:0, irpfOnDiscount:0, acquisitionValue:0 };
-    const p2 = p2Active ? calcPeriod(p2Contrib, p2_start, p2_end, irpfRate) : { contribution:0, refPrice:0, purchasePrice:0, shares:0, marketValue:0, discount:0, irpfOnDiscount:0, acquisitionValue:0 };
-
-    const totalContribution   = p1.contribution + p2.contribution;
-    const totalShares         = p1.shares + p2.shares;
-    const totalDiscount       = p1.discount + p2.discount;
-    const totalIrpfDiscount   = p1.irpfOnDiscount + p2.irpfOnDiscount;
-    const totalAcquisitionVal = p1.acquisitionValue + p2.acquisitionValue;
+    // Aggregate totals
+    const totalContribution          = periodResults.reduce((s,p) => s + p.contribution, 0);
+    const totalShares                = periodResults.reduce((s,p) => s + p.shares, 0);
+    const totalDiscount              = periodResults.reduce((s,p) => s + p.discount, 0);
+    const totalDiscountComponent     = periodResults.reduce((s,p) => s + p.discountComponent, 0);
+    const totalAppreciationComponent = periodResults.reduce((s,p) => s + p.appreciationComponent, 0);
+    const totalIrpfDiscount          = periodResults.reduce((s,p) => s + p.irpfOnDiscount, 0);
+    const totalAcquisitionVal        = periodResults.reduce((s,p) => s + p.acquisitionValue, 0);
 
     // Sale
     const totalSaleValue      = totalShares * salePrice;
@@ -694,19 +1013,23 @@
     const netA = totalSaleValue - totalContribution - totalIrpfDiscount - (capitalGain > 0 ? cgTax : 0);
     const totalTaxA = totalIrpfDiscount + (capitalGain > 0 ? cgTax : 0);
 
-    // Net outcome — Strategy B (3 years)
-    const irpfRefund = totalIrpfDiscount; // full refund if discount <= 12000/yr (assumed)
-    const netB = totalSaleValue - totalContribution - (capitalGain > 0 ? cgTax : 0) + irpfRefund - totalIrpfDiscount;
-    // simplified: netB = totalSaleValue - totalContribution - cgTax (since refund cancels the cost)
-    const netB_clean = totalSaleValue - totalContribution - (capitalGain > 0 ? cgTax : 0);
-    const totalTaxB = capitalGain > 0 ? cgTax : 0;
+    // Net outcome — Strategy B (3 years, refund scope configurable)
+    const refundScope = document.getElementById('refundScope').value;
+    const irpfRefundBase = refundScope === 'full' ? totalDiscount
+                         : refundScope === 'discount_only' ? totalDiscountComponent
+                         : 0;
+    const irpfRefundBenefitCapped = Math.min(irpfRefundBase, 12000); // €12k/yr exemption cap
+    const irpfRefund = irpfRefundBenefitCapped * (irpfRate / 100);
+    const netB_clean = totalSaleValue - totalContribution - totalIrpfDiscount + irpfRefund - (capitalGain > 0 ? cgTax : 0);
+    const totalTaxB  = totalIrpfDiscount - irpfRefund + (capitalGain > 0 ? cgTax : 0);
 
     // IRPF already paid on the gross salary used to fund the contribution
     // (contribution comes from net pay, so gross needed = contribution / (1 - rate))
     const irpfOnContribution = totalContribution * (irpfRate / 100) / (1 - irpfRate / 100);
 
-    // Effective discount net cost
-    const breakEvenPrice = p1.refPrice * 0.80; // For strategy A
+    // Break-even per share
+    const breakEvenPriceA = totalShares > 0 ? (totalContribution + totalIrpfDiscount) / totalShares : 0;
+    const breakEvenPriceB = totalShares > 0 ? (totalContribution + totalIrpfDiscount - irpfRefund) / totalShares : 0;
     const warningIrpf = totalDiscount > 12000;
 
     const resultsCard = document.getElementById('resultsCard');
@@ -727,11 +1050,11 @@
           <div class="value accent">${fmt(totalShares, 4)}</div>
         </div>
         <div class="stat">
-          <div class="label">20% discount value</div>
+          <div class="label">Employment benefit in kind (ESPP ESPECIE)</div>
           <div class="value green">${fmtE(totalDiscount)}</div>
         </div>
         <div class="stat">
-          <div class="label">20% discount IRPF withheld</div>
+          <div class="label">IRPF withheld on benefit (${irpfRate}%)</div>
           <div class="value red">${fmtE(totalIrpfDiscount)}</div>
         </div>
         <div class="stat">
@@ -760,34 +1083,41 @@
         <thead>
           <tr>
             <th>Item</th>
-            <th class="right">Period 1</th>
-            <th class="right">Period 2</th>
+            ${periodIds.map((id,i) => `<th class="right">Period ${i+1}</th>`).join('')}
           </tr>
         </thead>
         <tbody>
-          <tr><td>First day price</td><td class="right">${fmtE(p1_start)}</td><td class="right">${fmtE(p2_start)}</td></tr>
-          <tr><td>Last day price</td><td class="right">${fmtE(p1_end)}</td><td class="right">${fmtE(p2_end)}</td></tr>
-          <tr><td><strong>Reference price (lowest)</strong></td><td class="right"><strong>${fmtE(p1.refPrice)}</strong></td><td class="right"><strong>${fmtE(p2.refPrice)}</strong></td></tr>
-          <tr><td><strong>Purchase price (−20%)</strong></td><td class="right">${fmtE(p1.purchasePrice)}</td><td class="right">${fmtE(p2.purchasePrice)}</td></tr>
-          <tr><td>Employee contribution</td><td class="right">${fmtE(p1.contribution)}</td><td class="right">${fmtE(p2.contribution)}</td></tr>
-          <tr><td>Shares acquired</td><td class="right">${fmt(p1.shares, 4)}</td><td class="right">${fmt(p2.shares, 4)}</td></tr>
-          <tr><td>Market value at purchase</td><td class="right">${fmtE(p1.marketValue)}</td><td class="right">${fmtE(p2.marketValue)}</td></tr>
-          <tr><td>Company gift (free shares value)</td><td class="right" style="color:var(--green)">${fmtE(p1.discount)}</td><td class="right" style="color:var(--green)">${fmtE(p2.discount)}</td></tr>
-          <tr><td>IRPF on 20% discount (${irpfRate}%)</td><td class="right" style="color:var(--red)">${fmtE(p1.irpfOnDiscount)}</td><td class="right" style="color:var(--red)">${fmtE(p2.irpfOnDiscount)}</td></tr>
+          <tr><td>First day price</td>${periodResults.map(p => `<td class="right">${fmtE(p.refPrice > p.acquisitionValue/p.shares ? p.refPrice : p.refPrice)}</td>`).join('')}</tr>
+          <tr><td><strong>Reference price (lowest)</strong></td>${periodResults.map(p => `<td class="right"><strong>${fmtE(p.refPrice)}</strong></td>`).join('')}</tr>
+          <tr><td><strong>Purchase price (−${discountPct}%)</strong></td>${periodResults.map(p => `<td class="right">${fmtE(p.purchasePrice)}</td>`).join('')}</tr>
+          <tr><td>Employee contribution</td>${periodResults.map(p => `<td class="right">${fmtE(p.contribution)}</td>`).join('')}</tr>
+          <tr><td>Shares acquired</td>${periodResults.map(p => `<td class="right">${fmt(p.shares, 4)}</td>`).join('')}</tr>
+          <tr><td>Market value at purchase</td>${periodResults.map(p => `<td class="right">${fmtE(p.marketValue)}</td>`).join('')}</tr>
+          <tr><td>Income in kind (ESPP ESPECIE)</td>${periodResults.map(p => `<td class="right" style="color:var(--green)">${fmtE(p.discount)}</td>`).join('')}</tr>
+          <tr><td>IRPF withheld on benefit (${irpfRate}%)</td>${periodResults.map(p => `<td class="right" style="color:var(--red)">${fmtE(p.irpfOnDiscount)}</td>`).join('')}</tr>
         </tbody>
       </table>
 
-      ${warningIrpf ? `<div class="warning">⚠️ Your total discount (${fmtE(totalDiscount)}) exceeds the €12,000 annual exemption limit. The 3-year exemption only applies up to €12,000/year. The excess of ${fmtE(totalDiscount - 12000)} will still be taxed even if you wait 3 years.</div>` : ''}
+      ${warningIrpf ? `<div class="warning">⚠️ Your total employment benefit in kind (${fmtE(totalDiscount)}) exceeds the €12,000 annual exemption limit. The 3-year exemption only applies up to €12,000/year. The excess of ${fmtE(totalDiscount - 12000)} will still be taxed even if you wait 3 years.</div>` : ''}
 
       <hr class="divider" />
 
       <div class="period-header">Strategy Comparison (at sale price: ${fmtE(salePrice)})</div>
 
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <label style="margin:0;white-space:nowrap;font-size:0.82rem">IRPF refund after 3 years <span class="tag">Art. 42.3.f</span></label>
+        <select id="refundScope" style="flex:1" onchange="calculate();saveToStorage()">
+          <option value="full">Full income in kind</option>
+          <option value="discount_only">Discount portion only</option>
+          <option value="none">No refund</option>
+        </select>
+      </div>
+
       <div class="strategy-grid">
         <div class="strategy-card blue">
           <h3 class="blue">⚡ Quick Sale</h3>
           <div class="row"><span>Employee contribution</span><span>−${fmtE(totalContribution)}</span></div>
-          <div class="row red-val"><span>IRPF on 20% discount (withheld, not refunded)</span><span>−${fmtE(totalIrpfDiscount)}</span></div>
+          <div class="row red-val"><span>IRPF withheld on benefit (not refunded)</span><span>−${fmtE(totalIrpfDiscount)}</span></div>
           <div class="row total" style="border-color:rgba(79,142,247,0.2)"><span>Total cash out at purchase</span><span>−${fmtE(totalContribution + totalIrpfDiscount)}</span></div>
           <div class="row ${capitalGain > 0 ? 'red-val' : 'green-val'}"><span>Capital gains tax</span><span>${capitalGain > 0 ? '−' : ''}${fmtE(cgTax)}</span></div>
           <div class="row"><span>Sale proceeds</span><span>+${fmtE(totalSaleValue)}</span></div>
@@ -802,62 +1132,73 @@
         <div class="strategy-card green">
           <h3 class="green">🕐 Wait 3 Years</h3>
           <div class="row"><span>Employee contribution</span><span>−${fmtE(totalContribution)}</span></div>
-          <div class="row yellow-val"><span>IRPF on 20% discount (withheld)</span><span>−${fmtE(totalIrpfDiscount)}</span></div>
+          <div class="row yellow-val" style="font-size:0.78rem"><span>└ Discount portion (${discountPct}% of ref price)</span><span>${fmtE(totalDiscountComponent)}</span></div>
+          <div class="row yellow-val" style="font-size:0.78rem"><span>└ Price rise during period</span><span>${fmtE(totalAppreciationComponent)}</span></div>
+          <div class="row yellow-val"><span>IRPF withheld on benefit (${irpfRate}%)</span><span>−${fmtE(totalIrpfDiscount)}</span></div>
           <div class="row total" style="border-color:rgba(34,197,94,0.2)"><span>Total cash out at purchase</span><span>−${fmtE(totalContribution + totalIrpfDiscount)}</span></div>
-          <div class="row green-val"><span>IRPF on 20% discount (refund after 3y)</span><span>+${fmtE(irpfRefund)}</span></div>
+          ${irpfRefund > 0
+            ? `<div class="row green-val"><span>IRPF refund claimed (${refundScope === 'full' ? 'full benefit' : 'discount only'})</span><span>+${fmtE(irpfRefund)}</span></div>`
+            : `<div class="row" style="color:var(--muted);font-size:0.8rem"><span>No IRPF refund claimed</span><span>—0</span></div>`
+          }
           <div class="row ${capitalGain > 0 ? 'red-val' : 'green-val'}"><span>Capital gains tax</span><span>${capitalGain > 0 ? '−' : ''}${fmtE(cgTax)}</span></div>
           <div class="row"><span>Sale proceeds</span><span>+${fmtE(totalSaleValue)}</span></div>
           <div class="row total">
             <span>Net result</span>
             <span style="color:${netB_clean >= 0 ? 'var(--green)' : 'var(--red)'}">${netB_clean >= 0 ? '+' : ''}${fmtE(netB_clean)}</span>
           </div>
-          <div class="row"><span>Total taxes paid</span><span style="color:var(--red)">${fmtE(totalTaxB)}</span></div>
-          <div class="row"><span>Return on cash invested</span><span style="color:${netB_clean>=0?'var(--green)':'var(--red)'}">${fmt((netB_clean/totalContribution)*100,1)}%</span></div>
+          <div class="row"><span>Total taxes paid (net)</span><span style="color:var(--red)">${fmtE(Math.max(0, totalTaxB))}</span></div>
+          <div class="row"><span>Return on cash invested</span><span style="color:${netB_clean>=0?'var(--green)':'var(--red)'}">${totalContribution + totalIrpfDiscount - irpfRefund > 0 ? fmt((netB_clean/(totalContribution + totalIrpfDiscount - irpfRefund))*100,1) : '—'}%</span></div>
         </div>
       </div>
 
       <div class="info-box" style="margin-top:16px">
         <strong>How it appears in your payslip:</strong><br/>
-        Each month your contribution is shown under <em>deducciones</em> as <strong>"ESPP"</strong>. At the end of the purchase period, the company books the 20% discount as <strong>"ESPP ESPECIE"</strong> under <em>devengos</em> — this is a <em>rendimiento del trabajo en especie</em> (employment income in kind). IRPF is withheld on that amount, not on your contribution. Your contribution itself is not what gets the tax treatment — the <strong>benefit (the discount)</strong> is.<br/><br/>
+        Each month your contribution is shown under <em>deducciones</em> as <strong>"ESPP"</strong>. At the end of the purchase period, the company books the ${discountPct}% discount as <strong>"ESPP ESPECIE"</strong> under <em>devengos</em> — this is a <em>rendimiento del trabajo en especie</em> (employment income in kind). IRPF is withheld on that amount, not on your contribution. Your contribution itself is not what gets the tax treatment — the <strong>benefit (the discount)</strong> is.<br/><br/>
         <strong>Advantage of waiting 3 years:</strong>
-        ${fmtE(netB_clean - netA)} additional net gain
-        (equal to the IRPF refund on the discount: ${fmtE(irpfRefund)}). Recovered by filing a rectification with <strong>Agencia Tributaria</strong> in your annual tax return, not from the company.<br/><br/>
-        <strong>Break-even point (quick sale):</strong> If the sale price falls below
-        <strong>${fmtE(p1.purchasePrice)}</strong> (the discounted price you paid), you start losing money relative to your contribution.
-        The 20% discount acts as a buffer against price drops.<br/><br/>
+        ${fmtE(netB_clean - netA)} additional net gain vs quick sale
+        ${irpfRefund > 0 ? `(IRPF refund claimed: ${fmtE(irpfRefund)} — ${refundScope === 'full' ? 'full income in kind' : 'discount portion only'})` : '(no IRPF refund claimed — change the refund scope above to model it)'}.
+        Recovered by filing a rectification with <strong>Agencia Tributaria</strong> in your annual tax return, not from the company.<br/><br/>
+        <strong>Break-even point — Quick Sale (A):</strong> €${breakEvenPriceA.toFixed(2)}/share (recover contribution + IRPF withheld).<br/>
+        <strong>Break-even point — Wait 3 Years (B):</strong> €${breakEvenPriceB.toFixed(2)}/share (recover contribution + net IRPF after refund).<br/><br/>
         <strong>Capital gains tax brackets applied (2026):</strong> 19% (up to €6,000), 21% (€6k–€50k), 23% (€50k–€200k), 27% (€200k–€300k), 30% (>€300k).
       </div>
 
     `;
+
+    // Render charts
+    if (totalShares > 0) {
+      renderStrategyChart({ netA, netB: netB_clean, totalTaxA, totalTaxB, totalContribution, totalIrpfDiscount });
+      renderWaterfallChart({ totalContribution, totalIrpfDiscount, totalSaleValue, capitalGain, cgTax, netA });
+      renderBreakEvenChart({ totalShares, totalContribution, totalIrpfDiscount, irpfRefund, totalAcquisitionVal, salePrice });
+      document.getElementById('chartsCard').classList.remove('hidden');
+    }
+
+    // Restore refundScope if pending (first load — results card just rendered)
+    if (window._pendingRefundScope) {
+      const el = document.getElementById('refundScope');
+      if (el) { el.value = window._pendingRefundScope; window._pendingRefundScope = null; }
+    }
   }
 
-  // Tooltip strategy info
-  document.getElementById('saleStrategy').addEventListener('change', updateInfo);
+  // Strategy info box — static combined explanation
   function updateInfo() {
-    const v = document.getElementById('saleStrategy').value;
     const box = document.getElementById('strategyInfo');
-    if (v === 'fast') {
-      box.innerHTML = `<strong>Quick sale:</strong> Each month your contribution is deducted from your payslip as <em>"ESPP"</em> (deducciones). At the end of the purchase period, the company registers the 20% discount as <em>"ESPP ESPECIE"</em> in <strong>devengos</strong> (income in kind / rendimiento del trabajo en especie) and withholds IRPF on it. You keep this IRPF cost permanently — it is not refunded. When you sell, any price gain above the reference price is taxed as a capital gain (19–30%).`;
-    } else {
-      box.innerHTML = `<strong>Wait 3 years:</strong> Same payslip mechanics apply — your contribution is deducted monthly and the discount appears as <em>"ESPP ESPECIE"</em> in devengos at period end, with IRPF withheld by the company. However, since the plan is open to all employees under the same conditions, the benefit is exempt up to €12,000/year (Art. 42.3.f LIRPF) <strong>if you hold the shares for at least 3 years</strong>. After 3 years you file a rectification with <strong>Agencia Tributaria</strong> to recover the withheld IRPF. Only capital gains tax applies when you eventually sell.`;
-    }
+    box.innerHTML = `Each month your contribution is deducted from your payslip as <em>"ESPP"</em> (deducciones). At period end, the company books the employment benefit as <em>"ESPP ESPECIE"</em> in <strong>devengos</strong> (rendimiento del trabajo en especie) and withholds IRPF. When you sell, any gain above the <strong>last day price</strong> is taxed as a capital gain (19–30%). If you <strong>wait 3 years</strong> and the plan is open to all employees, the benefit is exempt up to €12,000/year (Art. 42.3.f LIRPF) — file a rectification with <strong>Agencia Tributaria</strong> to recover the withheld IRPF.`;
   }
   updateInfo();
 
   // Auto-calculate on load
-  togglePeriod(2);
+  loadFromStorage();  // restores periods + all settings; falls back to 2 default periods
   updateLivePriceUI();
   updateCurrencyUI();
   updatePricesUI();
-  updatePeriodEuros(1);
-  updatePeriodEuros(2);
   calculate();
   // Auto-fetch on load
   fetchExchangeRate();
 </script>
 
 <footer style="max-width:1100px;margin:40px auto 0;padding:20px 16px;border-top:1px solid #2e3350;font-size:0.75rem;color:#8892a4;line-height:1.7">
-  <strong style="color:#e2e8f0">⚠️ Disclaimer</strong> · <span style="opacity:0.5">v1.1.0 · 2026-05-12</span><br/>
+  <strong style="color:#e2e8f0">⚠️ Disclaimer</strong> · <span style="opacity:0.5">v1.5.0 · 2026-05-28</span><br/>
   This tool is provided strictly for <strong style="color:#e2e8f0">personal informational and educational purposes only</strong>. It does not constitute financial, investment, legal, or tax advice of any kind, and must not be interpreted as such. Nothing on this page should be considered a recommendation to buy, sell, or hold any financial instrument.<br/><br/>
   The calculations shown are <strong style="color:#e2e8f0">simplified simulations</strong> based on publicly available information and the developer's personal understanding of Spanish tax law (LIRPF). They may contain errors, inaccuracies, or outdated figures. Tax rules, rates, and exemption thresholds can change and may vary depending on your autonomous community, personal circumstances, and the specific criteria applied by the <strong style="color:#e2e8f0">Agencia Tributaria</strong>. This tool does not guarantee that its output reflects the actual tax treatment that the Agencia Tributaria would apply to your situation.<br/><br/>
   <strong style="color:#e2e8f0">The developer accepts no responsibility or liability whatsoever</strong> for any financial loss, tax liability, penalties, or other consequences arising from the use of or reliance on this tool. Always consult a qualified and registered tax advisor (<em>asesor fiscal</em>) before making any financial or tax-related decisions.
